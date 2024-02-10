@@ -37,9 +37,9 @@ import argparse
 ##############################################################
 # redshifts for targets not in RASSCALS or WBL file
 ##############################################################
-alt_redshift = {'MKW8s':0.027, 'MKW8':0.027, 'NGC5846':0.00571, 'HCG79':0.01450, 'Coma':0.02310, 'Abell1367':0.02200}
+alt_redshift = {'MKW8s':0.027, 'MKW8':0.027, 'NGC5846':0.00571, 'HCG79':0.01450, 'Coma':0.02310, 'Abell1367':0.02200,'PPS098':4894/3.e5}
 
-alt_coords = {'MKW8':[220.159167, 3.476389],'MKW8s':[220.159167, 3.476389], 'NGC5846':[226.622017, 1.605625],  'HCG79':[239.799454, 20.758555],'Coma':[194.953054, 27.980694],'Abell1367':[176.152083, 19.758889]} #RA and Dec
+alt_coords = {'MKW8':[220.159167, 3.476389],'MKW8s':[220.159167, 3.476389], 'NGC5846':[226.622017, 1.605625],  'HCG79':[239.799454, 20.758555],'Coma':[194.953054, 27.980694],'Abell1367':[176.152083, 19.758889],'PPS098':[20.754604, 33.512557]} #RA and Dec
 
 
 
@@ -213,7 +213,17 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(14,14))
     plt.subplots_adjust(hspace=.6,wspace=.4)
-    for i in range(len(redshift)):
+
+
+    # keep track of the surviving galaxies
+    if agcflag:
+        allgroupsample = np.zeros(len(agc),'bool')
+        groupname = np.zeros(len(agc),'S8')
+    else:
+        allgroupsample = np.zeros(len(nsa),'bool')
+        groupname = np.zeros(len(nsa),'S8')
+    nsum = 0
+    for i in range(len(redshift)): # loop over the groups
     #for i in [1]:
         #print()
         # find galaxies within 1.5 Mpc and +/- 4000 km/s
@@ -227,6 +237,7 @@ if __name__ == "__main__":
             # find location and scale
             flag = dr_flag & dz_flag
             vinput = agc['vopt'][flag]
+
         else:
             # compare with NSA
             dr_flag = np.sqrt((gra[i]-nsa['RA'])**2 + (gdec[i]-nsa['DEC'])**2) < dR_deg[i]
@@ -237,13 +248,15 @@ if __name__ == "__main__":
             vinput = nsa['Z'][flag]*3.e5
         if np.sum(flag) == 0:
             print(f"WARNING: no galaxies found for {group_list[i]}")
-            plt.subplot(8,8,i+1)
+            plt.subplot(8,9,i+1)
             plt.title(group_list[i])
             continue
         else:
             #print(f"number of remaining galaxies = {np.sum(flag)}")
-            if i == 5: # check NGC5846
-                print(vinput)
+            allgroupsample[flag]=True
+            groupname[flag] = group_list[i]
+            #if i == 5: # check NGC5846
+            #    print(vinput)
             c,s, t = \
                 get_biweight(vinput,nsigma=3)
             
@@ -256,8 +269,10 @@ if __name__ == "__main__":
             biweight_sigma_err_up[i] = s[2]-s[1]            
 
             ngal[i] = np.sum(flag)
+            nsum += ngal[i]
+            print(len(groupname),nsum)
             #print(f"ninput={len(vinput)},ngood={np.sum(~t.mask)},nreturn={len(t)}")
-            plt.subplot(8,8,i+1)
+            plt.subplot(8,9,i+1)
             plothist(vinput,t,biweight_center[i],biweight_sigma[i])
             #plt.axvline(x=redshift[i]*3.e5,c='c')
             #plt.axvline(x=redshift[i]*3.e5-dv,c='c',ls=':')
@@ -281,3 +296,17 @@ if __name__ == "__main__":
     else:
         outfile = 'uat_groups_center_scale_nsa.fits'
     newtab.write(outfile,format='fits',overwrite=True)
+
+
+    # save table of list members
+    if agcflag:
+        newtab2 = Table(agc[allgroupsample])
+    else:
+        newtab2 = Table(nsa[allgroupsample])
+    newtab2.add_column(groupname[allgroupsample],name='GroupID')
+    if agcflag:
+        outfile = 'uat_group_members_agc.fits'
+    else:
+        outfile = 'uat_group_members_nsa.fits'
+    newtab2.write(outfile,format='fits',overwrite=True)
+    
